@@ -31,6 +31,13 @@ const api = {
   // Clipboard
   copyToClipboard: (text: string) => ipcRenderer.invoke('clipboard:copy', text),
 
+  // Audio level for visualization
+  onAudioLevel: (callback: (level: number) => void) => {
+    const handler = (_: unknown, level: number) => callback(level);
+    ipcRenderer.on('audio:level', handler);
+    return () => ipcRenderer.removeListener('audio:level', handler);
+  },
+
   // Event listeners
   onRecordingState: (callback: (state: RecordingState) => void) => {
     const handler = (_: unknown, state: RecordingState) => callback(state);

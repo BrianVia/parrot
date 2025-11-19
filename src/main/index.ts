@@ -1,10 +1,23 @@
-import { app, BrowserWindow, ipcMain, globalShortcut, clipboard } from 'electron';
+import { app, BrowserWindow, globalShortcut } from 'electron';
 import path from 'path';
+import { setupIpcHandlers } from './ipc';
+import { AudioService } from './services/audio';
+import { TranscriptionManager } from './services/transcription/manager';
+import { TranscriptionDatabase } from './services/database';
+import { ClipboardManager } from './services/clipboard';
+import { getConfig } from './services/config';
 
+// Keep references to prevent garbage collection
 let mainWindow: BrowserWindow | null = null;
 
-function createWindow() {
-  mainWindow = new BrowserWindow({
+// Services
+const audioService = new AudioService();
+const transcriptionManager = new TranscriptionManager();
+const clipboardManager = new ClipboardManager();
+let database: TranscriptionDatabase | null = null;
+
+function createWindow(): BrowserWindow {
+  const win = new BrowserWindow({
     width: 900,
     height: 700,
     minWidth: 600,
@@ -20,105 +33,117 @@ function createWindow() {
 
   // Load app
   if (process.env.NODE_ENV === 'development') {
-    mainWindow.loadURL('http://localhost:5173');
-    mainWindow.webContents.openDevTools();
+    win.loadURL('http://localhost:5173');
+    win.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+    win.loadFile(path.join(__dirname, '../renderer/index.html'));
   }
 
-  mainWindow.on('closed', () => {
+  win.on('closed', () => {
     mainWindow = null;
   });
+
+  return win;
 }
 
-// IPC Handlers
-ipcMain.on('window:minimize', () => {
-  mainWindow?.minimize();
-});
+function registerHotkeys(window: BrowserWindow): void {
+  const config = getConfig();
 
-ipcMain.on('window:maximize', () => {
-  if (mainWindow?.isMaximized()) {
-    mainWindow.unmaximize();
+  // Toggle recording hotkey
+  const toggleKey = config.hotkeys.toggleRecording;
+  const registered = globalShortcut.register(toggleKey, () => {
+    window.webContents.send('hotkey:toggle-recording');
+  });
+
+  if (!registered) {
+    console.error(`Failed to register hotkey: ${toggleKey}`);
   } else {
-    mainWindow?.maximize();
+    console.log(`Registered hotkey: ${toggleKey}`);
   }
-});
 
-ipcMain.on('window:close', () => {
-  mainWindow?.close();
-});
+  // Cancel recording hotkey (Escape is usually local only)
+}
 
-ipcMain.handle('clipboard:copy', async (_, text: string) => {
-  clipboard.writeText(text);
-  return true;
-});
+function initializeServices(): void {
+  // Initialize database
+  database = new TranscriptionDatabase();
 
-// Placeholder handlers - implement these with actual services
-ipcMain.handle('audio:start', async () => {
-  console.log('Starting recording...');
-  mainWindow?.webContents.send('recording:state', 'recording');
-  return true;
-});
-
-ipcMain.handle('audio:stop', async () => {
-  console.log('Stopping recording...');
-  mainWindow?.webContents.send('recording:state', 'processing');
-
-  // Placeholder - replace with actual transcription
-  setTimeout(() => {
-    mainWindow?.webContents.send('transcription:result', {
-      text: 'This is a placeholder transcription. Implement the actual audio recording and OpenAI API call.',
-      language: 'en',
-      duration: 1000,
-    });
-    mainWindow?.webContents.send('recording:state', 'complete');
-  }, 1000);
-
-  return true;
-});
-
-ipcMain.handle('audio:devices', async () => {
-  // Placeholder - implement with naudiodon
-  return [{ id: 0, name: 'Default Microphone', isDefault: true }];
-});
-
-ipcMain.handle('config:get', async () => {
-  // Placeholder - implement with electron-store
-  return {
-    transcription: {
-      service: 'openai',
-      openai: { apiKey: '', model: 'whisper-1' },
-    },
-  };
-});
-
-ipcMain.handle('history:get', async (_, limit = 50) => {
-  // Placeholder - implement with better-sqlite3
-  return [];
-});
+  // Load config and configure transcription if API key exists
+  const config = getConfig();
+  if (config.transcription.openai.apiKey) {
+    transcriptionManager.configureOpenAI(
+      config.transcription.openai.apiKey,
+      config.transcription.openai.model
+    );
+    console.log('OpenAI transcription service configured');
+  } else {
+    console.log('OpenAI API key not set - configure in Settings');
+  }
+}
 
 // App lifecycle
 app.whenReady().then(() => {
-  createWindow();
+  // Initialize services first
+  initializeServices();
 
-  // Register global shortcut
-  globalShortcut.register('CommandOrControl+Shift+Space', () => {
-    mainWindow?.webContents.send('hotkey:toggle-recording');
-  });
+  // Create window
+  mainWindow = createWindow();
 
+  // Setup IPC handlers
+  if (database) {
+    setupIpcHandlers(mainWindow, {
+      audio: audioService,
+      transcription: transcriptionManager,
+      database: database,
+      clipboard: clipboardManager,
+    });
+  }
+
+  // Register global hotkeys
+  registerHotkeys(mainWindow);
+
+  // macOS: Re-create window when dock icon is clicked
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      mainWindow = createWindow();
+      if (database) {
+        setupIpcHandlers(mainWindow, {
+          audio: audioService,
+          transcription: transcriptionManager,
+          database: database,
+          clipboard: clipboardManager,
+        });
+      }
+      registerHotkeys(mainWindow);
     }
   });
 });
 
+// Quit when all windows are closed (except on macOS)
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
+// Cleanup on quit
 app.on('will-quit', () => {
+  // Unregister all hotkeys
   globalShortcut.unregisterAll();
+
+  // Close database
+  if (database) {
+    database.close();
+  }
+
+  console.log('Parrot shutting down');
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught exception:', error);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection:', reason);
 });
