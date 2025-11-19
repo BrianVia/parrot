@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Moon, Sun, Volume2 } from 'lucide-react';
+import { Moon, Sun, Volume2, Globe } from 'lucide-react';
 
 interface AudioDevice {
   id: number;
@@ -7,9 +7,37 @@ interface AudioDevice {
   isDefault: boolean;
 }
 
+// Common languages supported by Whisper
+const LANGUAGES = [
+  { code: 'auto', name: 'Auto-detect' },
+  { code: 'en', name: 'English' },
+  { code: 'es', name: 'Spanish' },
+  { code: 'fr', name: 'French' },
+  { code: 'de', name: 'German' },
+  { code: 'it', name: 'Italian' },
+  { code: 'pt', name: 'Portuguese' },
+  { code: 'nl', name: 'Dutch' },
+  { code: 'pl', name: 'Polish' },
+  { code: 'ru', name: 'Russian' },
+  { code: 'zh', name: 'Chinese' },
+  { code: 'ja', name: 'Japanese' },
+  { code: 'ko', name: 'Korean' },
+  { code: 'ar', name: 'Arabic' },
+  { code: 'hi', name: 'Hindi' },
+  { code: 'tr', name: 'Turkish' },
+  { code: 'vi', name: 'Vietnamese' },
+  { code: 'th', name: 'Thai' },
+  { code: 'uk', name: 'Ukrainian' },
+  { code: 'sv', name: 'Swedish' },
+  { code: 'da', name: 'Danish' },
+  { code: 'fi', name: 'Finnish' },
+  { code: 'no', name: 'Norwegian' },
+];
+
 export function SettingsView() {
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('whisper-1');
+  const [language, setLanguage] = useState('auto');
   const [autoPaste, setAutoPaste] = useState(true);
   const [autoCopy, setAutoCopy] = useState(true);
   const [closeToTray, setCloseToTray] = useState(true);
@@ -34,6 +62,7 @@ export function SettingsView() {
     if (config) {
       setApiKey(config.transcription?.openai?.apiKey || '');
       setModel(config.transcription?.openai?.model || 'whisper-1');
+      setLanguage(config.transcription?.language || 'auto');
       setAutoPaste(config.output?.autoPaste ?? true);
       setAutoCopy(config.output?.autoCopy ?? true);
       setCloseToTray(config.general?.closeToTray ?? true);
@@ -55,6 +84,10 @@ export function SettingsView() {
   const handleModelChange = (newModel: string) => {
     setModel(newModel);
     handleSave('transcription.openai.model', newModel);
+  };
+  const handleLanguageChange = (newLanguage: string) => {
+    setLanguage(newLanguage);
+    handleSave('transcription.language', newLanguage);
   };
   const handleAutoPasteChange = (value: boolean) => {
     setAutoPaste(value);
@@ -162,6 +195,27 @@ export function SettingsView() {
               <option value="whisper-1">Whisper-1 (Standard)</option>
               <option value="gpt-4o-transcribe">GPT-4o Transcribe (Newer)</option>
             </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Language</label>
+            <div className="flex items-center gap-2">
+              <Globe className="w-5 h-5 text-muted-foreground" />
+              <select
+                value={language}
+                onChange={(e) => handleLanguageChange(e.target.value)}
+                className="flex-1 px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {LANGUAGES.map((lang) => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Select a specific language for better accuracy, or use auto-detect
+            </p>
           </div>
         </div>
       </section>

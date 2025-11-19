@@ -7,17 +7,21 @@ import { TranscriptionDatabase } from './services/database';
 import { ClipboardManager } from './services/clipboard';
 import { TrayManager } from './services/tray';
 import { PushToTalkManager } from './services/push-to-talk';
+import { SoundManager } from './services/sound';
+import { AutoUpdater } from './services/updater';
 import { getConfig } from './services/config';
 
 // Keep references to prevent garbage collection
 let mainWindow: BrowserWindow | null = null;
 let trayManager: TrayManager | null = null;
 let pushToTalkManager: PushToTalkManager | null = null;
+let autoUpdater: AutoUpdater | null = null;
 
 // Services
 const audioService = new AudioService();
 const transcriptionManager = new TranscriptionManager();
 const clipboardManager = new ClipboardManager();
+const soundManager = new SoundManager();
 let database: TranscriptionDatabase | null = null;
 
 function createWindow(): BrowserWindow {
@@ -136,17 +140,31 @@ app.whenReady().then(() => {
   // Setup system tray
   trayManager = new TrayManager(mainWindow);
 
-  // Update tray when recording state changes
+  // Setup auto-updater
+  autoUpdater = new AutoUpdater(mainWindow);
+  // Check for updates after a short delay
+  setTimeout(() => {
+    autoUpdater?.checkForUpdates();
+  }, 3000);
+
+  // Update tray and play sounds when recording state changes
   audioService.on('started', () => {
     trayManager?.setRecording(true);
+    soundManager.playStart();
   });
 
   audioService.on('stopped', () => {
     trayManager?.setRecording(false);
+    soundManager.playStop();
   });
 
   audioService.on('cancelled', () => {
     trayManager?.setRecording(false);
+  });
+
+  // Play complete sound when transcription finishes
+  transcriptionManager.on('result', () => {
+    soundManager.playComplete();
   });
 
   // Close to tray behavior

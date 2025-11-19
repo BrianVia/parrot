@@ -12,6 +12,7 @@ export interface AppConfig {
   };
   transcription: {
     service: 'openai' | 'local';
+    language: string; // ISO 639-1 code, e.g., 'en', 'es', 'auto'
     openai: {
       apiKey: string;
       model: 'whisper-1' | 'gpt-4o-transcribe';
@@ -48,6 +49,7 @@ const defaults: AppConfig = {
   },
   transcription: {
     service: 'openai',
+    language: 'auto', // Auto-detect language
     openai: {
       apiKey: '',
       model: 'whisper-1',

@@ -1,3 +1,4 @@
+import { EventEmitter } from 'events';
 import { OpenAITranscriptionService, OpenAIModel } from './openai';
 import type {
   TranscriptionService,
@@ -5,7 +6,7 @@ import type {
   TranscriptionResult,
 } from './types';
 
-export class TranscriptionManager {
+export class TranscriptionManager extends EventEmitter {
   private services: Map<string, TranscriptionService> = new Map();
   private primaryService: string = 'openai';
 
@@ -41,7 +42,9 @@ export class TranscriptionManager {
       throw new Error(`Transcription service '${this.primaryService}' not configured`);
     }
 
-    return service.transcribe(audio, options);
+    const result = await service.transcribe(audio, options);
+    this.emit('result', result);
+    return result;
   }
 
   getAvailableServices(): string[] {

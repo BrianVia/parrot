@@ -1,4 +1,5 @@
 import { Tray, Menu, nativeImage, BrowserWindow, app } from 'electron';
+import path from 'path';
 
 export class TrayManager {
   private tray: Tray | null = null;
@@ -31,33 +32,20 @@ export class TrayManager {
     });
   }
 
-  private createIcon(): Electron.NativeImage {
-    // Create a simple 16x16 icon programmatically
-    // In production, use actual PNG files from resources/icons/
-    const size = 16;
-    const canvas = Buffer.alloc(size * size * 4);
-
-    // Fill with a parrot-green color (#10B981)
-    for (let i = 0; i < size * size; i++) {
-      const offset = i * 4;
-      if (this.isRecording) {
-        // Red when recording
-        canvas[offset] = 239;     // R
-        canvas[offset + 1] = 68;  // G
-        canvas[offset + 2] = 68;  // B
-      } else {
-        // Green when idle
-        canvas[offset] = 16;      // R
-        canvas[offset + 1] = 185; // G
-        canvas[offset + 2] = 129; // B
-      }
-      canvas[offset + 3] = 255;   // A
+  private getIconPath(name: string): string {
+    // In development, icons are in resources/icons
+    // In production, they'd be in the app's resources
+    const isDev = !app.isPackaged;
+    if (isDev) {
+      return path.join(__dirname, '..', '..', '..', 'resources', 'icons', name);
     }
+    return path.join(process.resourcesPath, 'icons', name);
+  }
 
-    return nativeImage.createFromBuffer(canvas, {
-      width: size,
-      height: size,
-    });
+  private createIcon(): Electron.NativeImage {
+    const iconName = this.isRecording ? 'tray-recording.png' : 'tray-idle.png';
+    const iconPath = this.getIconPath(iconName);
+    return nativeImage.createFromPath(iconPath);
   }
 
   private updateMenu(): void {

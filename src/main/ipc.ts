@@ -53,8 +53,11 @@ export function setupIpcHandlers(
       }
 
       // Transcribe
+      const config = getConfig();
+      const language = config.transcription.language === 'auto' ? undefined : config.transcription.language;
       const result = await transcription.transcribe(currentAudioBuffer, {
-        prompt: getConfig().processing.customVocabulary.join(', '),
+        prompt: config.processing.customVocabulary.join(', '),
+        language,
       });
 
       // Save to history
@@ -62,7 +65,6 @@ export function setupIpcHandlers(
       database.insert(result, serviceName);
 
       // Handle output
-      const config = getConfig();
       if (config.output.autoCopy) {
         clipboard.copy(result.text);
       }
