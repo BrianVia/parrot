@@ -22,6 +22,7 @@ const api = {
   // History
   getHistory: (limit?: number) => ipcRenderer.invoke('history:get', limit),
   searchHistory: (query: string) => ipcRenderer.invoke('history:search', query),
+  deleteHistoryItem: (id: number) => ipcRenderer.invoke('history:delete', id),
 
   // Window controls
   minimize: () => ipcRenderer.send('window:minimize'),
