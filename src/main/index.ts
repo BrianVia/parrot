@@ -1,14 +1,18 @@
-import { app, BrowserWindow, globalShortcut } from 'electron';
+import { app, BrowserWindow, globalShortcut, Notification } from 'electron';
 import path from 'path';
 import { setupIpcHandlers } from './ipc';
 import { AudioService } from './services/audio';
 import { TranscriptionManager } from './services/transcription/manager';
 import { TranscriptionDatabase } from './services/database';
 import { ClipboardManager } from './services/clipboard';
+import { TrayManager } from './services/tray';
+import { PushToTalkManager } from './services/push-to-talk';
 import { getConfig } from './services/config';
 
 // Keep references to prevent garbage collection
 let mainWindow: BrowserWindow | null = null;
+let trayManager: TrayManager | null = null;
+let pushToTalkManager: PushToTalkManager | null = null;
 
 // Services
 const audioService = new AudioService();
@@ -60,8 +64,32 @@ function registerHotkeys(window: BrowserWindow): void {
   } else {
     console.log(`Registered hotkey: ${toggleKey}`);
   }
+}
 
-  // Cancel recording hotkey (Escape is usually local only)
+function setupPushToTalk(window: BrowserWindow): void {
+  pushToTalkManager = new PushToTalkManager('RightAlt');
+
+  pushToTalkManager.on('start', () => {
+    if (!audioService.getIsRecording()) {
+      window.webContents.send('hotkey:toggle-recording');
+    }
+  });
+
+  pushToTalkManager.on('stop', () => {
+    if (audioService.getIsRecording()) {
+      window.webContents.send('hotkey:toggle-recording');
+    }
+  });
+
+  pushToTalkManager.start();
+  console.log('Push-to-talk enabled (Right Alt)');
+}
+
+// Notification helper - can be used for transcription completion etc.
+export function showNotification(title: string, body: string): void {
+  if (Notification.isSupported()) {
+    new Notification({ title, body }).show();
+  }
 }
 
 function initializeServices(): void {
@@ -102,6 +130,34 @@ app.whenReady().then(() => {
   // Register global hotkeys
   registerHotkeys(mainWindow);
 
+  // Setup push-to-talk
+  setupPushToTalk(mainWindow);
+
+  // Setup system tray
+  trayManager = new TrayManager(mainWindow);
+
+  // Update tray when recording state changes
+  audioService.on('started', () => {
+    trayManager?.setRecording(true);
+  });
+
+  audioService.on('stopped', () => {
+    trayManager?.setRecording(false);
+  });
+
+  audioService.on('cancelled', () => {
+    trayManager?.setRecording(false);
+  });
+
+  // Close to tray behavior
+  const config = getConfig();
+  mainWindow.on('close', (event) => {
+    if (config.general.closeToTray && mainWindow) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
+
   // macOS: Re-create window when dock icon is clicked
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -115,8 +171,12 @@ app.whenReady().then(() => {
         });
       }
       registerHotkeys(mainWindow);
+    } else {
+      mainWindow?.show();
     }
   });
+
+  console.log('Parrot started successfully');
 });
 
 // Quit when all windows are closed (except on macOS)
@@ -130,6 +190,16 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   // Unregister all hotkeys
   globalShortcut.unregisterAll();
+
+  // Stop push-to-talk
+  if (pushToTalkManager) {
+    pushToTalkManager.stop();
+  }
+
+  // Destroy tray
+  if (trayManager) {
+    trayManager.destroy();
+  }
 
   // Close database
   if (database) {

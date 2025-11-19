@@ -1,14 +1,26 @@
 import { useStore } from '../store';
 import { Mic, Square, Loader2, Copy, Check } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { clsx } from 'clsx';
+import { Waveform } from '../components/Waveform';
 
 export function RecordingView() {
   const { recordingState, lastResult, error } = useStore();
   const [copied, setCopied] = useState(false);
+  const [audioLevel, setAudioLevel] = useState(0);
 
   const isRecording = recordingState === 'recording';
   const isProcessing = recordingState === 'processing';
+
+  useEffect(() => {
+    const unsubscribe = window.parrot.onAudioLevel((level) => {
+      setAudioLevel(level);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   const handleToggleRecording = async () => {
     if (isRecording) {
@@ -28,6 +40,11 @@ export function RecordingView() {
 
   return (
     <div className="flex flex-col items-center justify-center h-full p-8">
+      {/* Waveform visualization */}
+      <div className="mb-6">
+        <Waveform level={audioLevel} isRecording={isRecording} />
+      </div>
+
       {/* Status indicator */}
       <div className="mb-8 text-center">
         <p className="text-muted-foreground text-sm">
