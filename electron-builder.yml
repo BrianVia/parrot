@@ -1,0 +1,40 @@
+appId: com.parrot.app
+productName: Parrot
+copyright: Copyright © 2024
+
+directories:
+  output: release
+  buildResources: resources
+
+files:
+  - dist/**/*
+  - "!**/.git"
+  - "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}"
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: AudioVideo
+  icon: resources/icons
+  desktop:
+    StartupWMClass: parrot
+
+deb:
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+
+appImage:
+  license: LICENSE
+
+publish:
+  provider: github
+  owner: yourusername
+  repo: parrot
