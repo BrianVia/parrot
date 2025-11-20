@@ -1,5 +1,5 @@
 import { clipboard } from 'electron';
-import robot from 'robotjs';
+import { exec } from 'child_process';
 
 export class ClipboardManager {
   private previousContent: string = '';
@@ -18,10 +18,48 @@ export class ClipboardManager {
    */
   async paste(): Promise<void> {
     // Small delay to ensure clipboard is ready
-    await this.delay(50);
+    await this.delay(100);
 
-    // Simulate Ctrl+V using robotjs
-    robot.keyTap('v', ['control']);
+    const platform = process.platform;
+
+    if (platform === 'linux') {
+      // Use xdotool on Linux
+      return new Promise((resolve, reject) => {
+        exec('xdotool key ctrl+v', (error) => {
+          if (error) {
+            console.warn('Failed to paste with xdotool:', error.message);
+            console.warn('Install xdotool: sudo apt install xdotool');
+            reject(error);
+          } else {
+            resolve();
+          }
+        });
+      });
+    } else if (platform === 'darwin') {
+      // Use osascript on macOS
+      return new Promise((resolve, reject) => {
+        exec('osascript -e \'tell application "System Events" to keystroke "v" using command down\'', (error) => {
+          if (error) {
+            console.warn('Failed to paste on macOS:', error.message);
+            reject(error);
+          } else {
+            resolve();
+          }
+        });
+      });
+    } else {
+      // Windows - use PowerShell
+      return new Promise((resolve, reject) => {
+        exec('powershell -command "$wshell = New-Object -ComObject wscript.shell; $wshell.SendKeys(\'^v\')"', (error) => {
+          if (error) {
+            console.warn('Failed to paste on Windows:', error.message);
+            reject(error);
+          } else {
+            resolve();
+          }
+        });
+      });
+    }
   }
 
   /**
